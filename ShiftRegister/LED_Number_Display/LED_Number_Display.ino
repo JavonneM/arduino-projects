@@ -1,16 +1,22 @@
-int PIN_DS = 6;
-int PIN_OE = 9;
-int PIN_STORE = 10;
-int PIN_CLOCK = 11;
+//int PIN_DS = 6;
+//int PIN_OE = 9;
+//int PIN_STORE = 10;
+//int PIN_CLOCK = 11;
 
+int PIN_DS = 12;
+int PIN_OE = 8;
+int PIN_STORE = 9;
+int PIN_CLOCK = 10;
+int PIN_CLR = 11;
 //int UPDATE_CYCLE = 100;
 int BRIGHTNESS = 250;
 int counter;
-int DISPLAY_DURATION = 3000;
+float displayValue;
+int DISPLAY_DURATION = 2;
 int DELAY = 1;
 
 
-#define DEBUG 1
+#define DEBUG 0
 
 // Prototypes
 void led_write(float value);
@@ -48,6 +54,7 @@ void setup() {
   pinMode(PIN_DS, OUTPUT);
   pinMode(PIN_CLOCK, OUTPUT);
   pinMode(PIN_STORE, OUTPUT);
+  pinMode(PIN_CLR, HIGH);
   counter = 0;
   #if DEBUG == 1
   Serial.begin(9600);
@@ -72,31 +79,41 @@ void setup() {
   digits.digits = malloc(digits_size * sizeof(led_digit));
   digits.driver = malloc(digits_size * sizeof(unsigned char));
   for (index = 0; index < digits_size; index++) {
-    digits.digits[index] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+    digits.digits[index] = {0x02, 0x03, 0x04, 0x01, 0x0, 0x07, 0x06, 0x05};
     digits.driver[index] = (1 << index);
+//    Serial.print("Driver pin")
   }
 
 //  memset(buff, 0, 8 * sizeof(char));
 //  float_to_char(4.324, buff, 8);
 //  memset(buff, 0, 8 * sizeof(char));
 //  float_to_char(123456.324, buff, 8);
+  digitalWrite(PIN_CLR, HIGH);
 }
 
 // the loop routine runs over and over again forever:
 void loop() {
   // Get number
-//  float value = (random(10000) * 1.0);
-//  led_write(value);
+  if (counter % 50000 == 0) {
+//    displayValue = (random(10000) * 1.0);
+    displayValue = 1.125;
+    Serial.println("******");
+    Serial.println(displayValue,6);
+  }
+//  displayValue = ;
+  led_write(displayValue);
 
-  analogWrite(PIN_OE, 255);
+//  analogWrite(PIN_OE, 255);
 //  writeData(~data);
-  writeData(data);
-  writeData(0b11111110);
-
-  analogWrite(PIN_OE, 255 - BRIGHTNESS);
+//  byte dd = get_byte_for_digit(digits.digits[1], '2', true);
+//  digitalWrite(PIN_OE, HIGH);
+//  writeData(0b00000001); // Driver is correct
+//  writeData(~0b10000000);
+//  digitalWrite(PIN_OE, LOW);
+//  analogWrite(PIN_OE, 255 - BRIGHTNESS);
 //  data = updateData(data);
   
-//  counter++;
+  counter++;
   delay(DISPLAY_DURATION); 
 //  analogWrite(PIN_OE, 0);
 }
@@ -156,44 +173,45 @@ void led_write(float value) {
   byte data;
   byte enable_digit_data;
   int i = 0;
-  int char_index = 0;
-  for (i = 0; i < 4; i++ ) {
+  int char_index = 7;
+  for (i = 0; i < digits.count; i++ ) {
     enable_digit_data = digits.driver[i];
-    while (buff[char_index] == '.') {
-      char_index += 1;
-      if (char_index >= 8) {
-        break;
-      }      
+    while (char_index >= 0 && (buff[char_index] == '.' || buff[char_index] == 0 )) {
+      char_index -= 1;
     }
-    if (char_index >= 8) {
+    if (char_index < 0) {
       break;
     }
-    bool has_decimal = char_index + 1 < 8 && buff[char_index + 1] == '.';
-    
+    bool has_decimal = char_index - 1 >= 0 && buff[char_index - 1] == '.';
+//    Serial.print("Getting digit for: "); Serial.print(buff[char_index]); Serial.print(" at index: "); Serial.println(char_index);
     data = get_byte_for_digit(digits.digits[i], buff[char_index], has_decimal);
-    
-    analogWrite(PIN_OE, 255);
-//    writeData(enable_digit_data);
-//    writeData(~data); // this is the actual digit
-    writeData(0x00000000);
-    writeData(0x00000000); // this is the actual digit
-    analogWrite(PIN_OE, 255 - BRIGHTNESS);
+//    analogWrite(PIN_OE, 255);
+    digitalWrite(PIN_OE, HIGH);
+    writeData(enable_digit_data);
+    writeData(~data); // this is the actual digit
+    Serial.print(buff[char_index]); Serial.print(" ");
+    Serial.println(data);
+//    writeData(0b11111111);
+//    writeData(0b11111111); // this is the actual digit
+    digitalWrite(PIN_OE, LOW);
+//    analogWrite(PIN_OE, 255 - BRIGHTNESS);
     delay(DISPLAY_DURATION); 
+    char_index--;
   }
-  delay(1000);
+//  delay(1000);
 }
 
 void float_to_char(float value, char* buff, int chars) {
   // Preprocess value
   float mutated = value;
 
-  while(mutated > 1000) {
-    mutated /= 10;
-  }
+//  while(mutated > 1000) {
+//    mutated /= 10;
+//  }
   // now mutated should be less that 1000
 
 
-  
+  Serial.print("Mutated: "); Serial.println(mutated);
   String myString = String(mutated);
   myString.toCharArray(buff, chars);
   int i;
@@ -208,6 +226,7 @@ void float_to_char(float value, char* buff, int chars) {
 
 byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool enable_decimal) {
   byte data = 0;
+//  Serial.print("Input: "); Serial.println(static_cast<char>(character));
   switch (character) {
     case '0': {
       data = (1 << digit.BOTTOM) | (1 << digit.BOTTOM_LEFT) | 
@@ -216,7 +235,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
       break;
     }
     case '1': {
-      data =   (1 << digit.BOTTOM_RIGHT) | (1 << digit.TOP_LEFT);
+      data =   (1 << digit.BOTTOM_RIGHT) | (1 << digit.TOP_RIGHT);
       break;
     }
     case '2': {
@@ -244,7 +263,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
     case '6': {
       data =  (1 << digit.BOTTOM) | (1 << digit.BOTTOM_LEFT) | 
         (1 << digit.BOTTOM_RIGHT) | (1 <<digit.TOP) | 
-        (1 << digit.TOP_LEFT);
+        (1 << digit.TOP_LEFT) | (1 << digit.MID);
       break;
     }
     case '7': {
@@ -268,6 +287,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
   if (enable_decimal) {
     data = data | (1 << digit.DECIMAL);
   }
+//  Serial.print("Data: "); Serial.println(data);
   return data;
 }
 
