@@ -12,11 +12,11 @@ int PIN_CLR = 11;
 int BRIGHTNESS = 250;
 int counter;
 float displayValue;
-int DISPLAY_DURATION = 2;
+int DISPLAY_DURATION = 1000;
 int DELAY = 1;
 
 
-#define DEBUG 0
+#define DEBUG 1
 
 // Prototypes
 void led_write(float value);
@@ -81,13 +81,8 @@ void setup() {
   for (index = 0; index < digits_size; index++) {
     digits.digits[index] = {0x02, 0x03, 0x04, 0x01, 0x0, 0x07, 0x06, 0x05};
     digits.driver[index] = (1 << index);
-//    Serial.print("Driver pin")
   }
 
-//  memset(buff, 0, 8 * sizeof(char));
-//  float_to_char(4.324, buff, 8);
-//  memset(buff, 0, 8 * sizeof(char));
-//  float_to_char(123456.324, buff, 8);
   digitalWrite(PIN_CLR, HIGH);
 }
 
@@ -96,7 +91,7 @@ void loop() {
   // Get number
   if (counter % 50000 == 0) {
 //    displayValue = (random(10000) * 1.0);
-    displayValue = 1.125;
+    displayValue = 0.435;
     Serial.println("******");
     Serial.println(displayValue,6);
   }
@@ -182,7 +177,7 @@ void led_write(float value) {
     if (char_index < 0) {
       break;
     }
-    bool has_decimal = char_index - 1 >= 0 && buff[char_index - 1] == '.';
+    bool has_decimal = char_index + 1 < 8 && buff[char_index + 1] == '.';
 //    Serial.print("Getting digit for: "); Serial.print(buff[char_index]); Serial.print(" at index: "); Serial.println(char_index);
     data = get_byte_for_digit(digits.digits[i], buff[char_index], has_decimal);
 //    analogWrite(PIN_OE, 255);

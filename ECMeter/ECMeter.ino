@@ -43,11 +43,11 @@ int PIN_CLR = 11;
 //int UPDATE_CYCLE = 100;
 int BRIGHTNESS = 250;
 int counter;
-int DISPLAY_DURATION = 30000;
-int DELAY = 1;
+int DISPLAY_DURATION = 1;
+int DELAY = 0;
 
 
-#define DEBUG 1
+#define DEBUG 0
 
 // Prototypes
 void led_write(float value);
@@ -75,7 +75,12 @@ typedef struct led_digit_array {
 led_digit_array digits;
 //led_digit digit;
 // LED NUMBER DISPLAY END
+
+
+// time of last read
+unsigned long last_read_time;
 void setup() {
+  last_read_time = millis();
   // Setup Float Switch
   pinMode(PIN_FLOAT_SWITCH_HIGH, OUTPUT);
   pinMode(PIN_FLOAT_SWITCH_READ, INPUT);
@@ -89,7 +94,6 @@ void setup() {
   // put your setup code here, to run once:
   pinMode(PIN_DS_HIGH, OUTPUT);
   digitalWrite(PIN_DS_HIGH, HIGH);
-  Serial.begin(9600);
   // Start up the library
   sensors.begin();
   
@@ -103,17 +107,8 @@ void setup() {
   #if DEBUG == 1
   Serial.begin(9600);
   #endif
-  Serial.print(0b10000000 >> 1); Serial.print("\n");
-  Serial.print(0b10000000 >> 8); Serial.print("\n");
-//  data = get_byte_for_digit(digit, '2' , false);
-  Serial.print("Normal data: ");
-//  Serial.println(data);
-//  data = ~get_byte_for_digit(digit, '2' , false);
-  Serial.print("Inverted data: ");
-//  Serial.println(data);
-
+  
   // Digit setup
-  randomSeed(0);
   int digits_size = 4;
   int index = 0;
   char *buff = malloc(digits_size * sizeof(char));
@@ -123,24 +118,27 @@ void setup() {
   digits.digits = malloc(digits_size * sizeof(led_digit));
   digits.driver = malloc(digits_size * sizeof(unsigned char));
   for (index = 0; index < digits_size; index++) {
-    digits.digits[index] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+    digits.digits[index] = {0x02, 0x03, 0x04, 0x01, 0x0, 0x07, 0x06, 0x05};
     digits.driver[index] = (1 << index);
   }
+
   digitalWrite(PIN_CLR, HIGH);
   // LED NUMBER DISPLAY END
 }
-
 void loop() {
-//  temperature = getTemperature();  
-//  readEC();
-//  computeECValue(rawECValue, temperature);
-//  getFloatSwitch();
-//  displayResults();
+  unsigned long now = millis();
+  if ((now - last_read_time) > 2500) {
+    temperature = getTemperature();  
+    readEC();
+    computeECValue(rawECValue, temperature);
+    getFloatSwitch();
+//    displayResults();
+    last_read_time = millis();
+    Serial.println(now);
+  }
   // Do shift register things
-
-  led_write(0.0);
-  
-  delay(5000);
+  led_write(EC25);
+  counter++;
 }
 
 float readEC() {
@@ -217,7 +215,6 @@ void pulseClock() {
 
 
 // LED NUMBER DISPLAY
-
 void led_write(float value) {
   char buff[8] = {};
   
@@ -225,60 +222,44 @@ void led_write(float value) {
   byte data;
   byte enable_digit_data;
   int i = 0;
-  int char_index = 0;
-  for (i = 0; i < 4; i++ ) {
+  int char_index = 7;
+  for (i = 0; i < digits.count; i++ ) {
     enable_digit_data = digits.driver[i];
-    while (buff[char_index] == '.') {
-      char_index += 1;
-      if (char_index >= 8) {
-        break;
-      }      
+    while (char_index >= 0 && (buff[char_index] == '.' || buff[char_index] == 0 )) {
+      char_index -= 1;
     }
-    if (char_index >= 8) {
+    if (char_index < 0) {
       break;
     }
     bool has_decimal = char_index + 1 < 8 && buff[char_index + 1] == '.';
-    
+//    Serial.print("Getting digit for: "); Serial.print(buff[char_index]); Serial.print(" at index: "); Serial.println(char_index);
     data = get_byte_for_digit(digits.digits[i], buff[char_index], has_decimal);
-    Serial.println("Disabling Display");
-    digitalWrite(PIN_OE, HIGH);
 //    analogWrite(PIN_OE, 255);
-    writeData(0b11111111);
-    writeData(0b00000000); // this is the actual digit
+    digitalWrite(PIN_OE, HIGH);
+    writeData(enable_digit_data);
+    writeData(~data); // this is the actual digit
+//    writeData(0b11111111);
+//    writeData(0b11111111); // this is the actual digit
     digitalWrite(PIN_OE, LOW);
 //    analogWrite(PIN_OE, 255 - BRIGHTNESS);
-    Serial.println("On display");
     delay(DISPLAY_DURATION); 
-    
+    char_index--;
   }
-  delay(1000);
+//  delay(1000);
 }
 
 void float_to_char(float value, char* buff, int chars) {
   // Preprocess value
   float mutated = value;
-
-  while(mutated > 1000) {
-    mutated /= 10;
-  }
-  // now mutated should be less that 1000
-
-
-  
   String myString = String(mutated);
   myString.toCharArray(buff, chars);
-  int i;
-  for (i = 0; i < 8; i++) {
-    Serial.print('|');
-    Serial.print(buff[i]);
-  }
-  Serial.println();
 }
 
 
 
 byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool enable_decimal) {
   byte data = 0;
+//  Serial.print("Input: "); Serial.println(static_cast<char>(character));
   switch (character) {
     case '0': {
       data = (1 << digit.BOTTOM) | (1 << digit.BOTTOM_LEFT) | 
@@ -287,7 +268,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
       break;
     }
     case '1': {
-      data =   (1 << digit.BOTTOM_RIGHT) | (1 << digit.TOP_LEFT);
+      data =   (1 << digit.BOTTOM_RIGHT) | (1 << digit.TOP_RIGHT);
       break;
     }
     case '2': {
@@ -315,7 +296,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
     case '6': {
       data =  (1 << digit.BOTTOM) | (1 << digit.BOTTOM_LEFT) | 
         (1 << digit.BOTTOM_RIGHT) | (1 <<digit.TOP) | 
-        (1 << digit.TOP_LEFT);
+        (1 << digit.TOP_LEFT) | (1 << digit.MID);
       break;
     }
     case '7': {
@@ -339,6 +320,7 @@ byte get_byte_for_digit(struct led_digit digit, unsigned char character, bool en
   if (enable_decimal) {
     data = data | (1 << digit.DECIMAL);
   }
+//  Serial.print("Data: "); Serial.println(data);
   return data;
 }
 // LED NUMBER DISPLAY END
